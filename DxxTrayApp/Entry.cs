@@ -1,20 +1,23 @@
-﻿using System;
-using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
+﻿using Shaolinq;
+using System;
 
 namespace DxxTrayApp
 {
-    [Table("Entry")]
-    public class Entry
+    [DataAccessObject]
+    public abstract class Entry : DataAccessObject<Guid>
     {
-        [Column("Index")]
-        [Key]
-        [Required]
-        [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
-        public int Index { get; set; }
+        [AutoIncrement]
+        [PersistedMember]
+        public abstract override Guid Id { get; set; }
 
-        [Column("SubmitTime")]
-        [Required]
-        public DateTime SubmitTime { get; set; }
+        [PersistedMember]
+        public abstract DateTime SubmitTime { get; set; }
+    }
+
+    [DataAccessModel]
+    public abstract class EntryModel : DataAccessModel
+    {
+        [DataAccessObjects]
+        public abstract DataAccessObjects<Entry> Entries { get; }
     }
 }

@@ -1,10 +1,11 @@
-﻿using DxxTrayApp.Properties;
-using System;
-using System.Data.SQLite;
-using System.Drawing;
-using System.IO;
-using System.Windows.Forms;
+﻿using DxxTrayApp;
+using DxxTrayApp.Properties;
 using NLog;
+using Shaolinq;
+using Shaolinq.Sqlite;
+using System;
+using System.Drawing;
+using System.Windows.Forms;
 
 namespace DxxTray
 {
@@ -43,14 +44,10 @@ namespace DxxTray
             try
             {
                 const string DB_NAME = "DxxTrayApp.sqlite";
+                var config = SqliteConfiguration.Create(DB_NAME);
 
-                if (!File.Exists(DB_NAME))
-                {
-                    SQLiteConnection.CreateFile(DB_NAME);
-                }
-
-                conn = new SQLiteConnection($"Data Source={DB_NAME};Version=3;");
-                conn.Open();
+                entryModel = DataAccessModel.BuildDataAccessModel<EntryModel>(config);
+                entryModel.Create(DatabaseCreationOptions.DeleteExistingDatabase);
             }
             catch (Exception e)
             {
@@ -93,7 +90,7 @@ namespace DxxTray
                     Top = OUTER_PADDING,
                 };
 
-                okBtn = new Button()
+                confirmBtn = new Button()
                 {
                     Text = "Confirm",
                     AutoSize = true,
@@ -115,7 +112,7 @@ namespace DxxTray
                     Text = "Entry Date/Time",
                     MinimizeBox = false,
                     MaximizeBox = false,
-                    Size = new Size(okBtn.Right + OUTER_PADDING * 2, descriptionLabel.Bottom + OUTER_PADDING),
+                    Size = new Size(confirmBtn.Right + OUTER_PADDING * 2, descriptionLabel.Bottom + OUTER_PADDING),
                 };
 
                 // need to offset the titlebar height
@@ -123,7 +120,7 @@ namespace DxxTray
                 entryForm.Height += screenRect.Top - entryForm.Top;
 
                 entryForm.Controls.Add(picker);
-                entryForm.Controls.Add(okBtn);
+                entryForm.Controls.Add(confirmBtn);
                 entryForm.Controls.Add(descriptionLabel);
             }
             catch (Exception e)
@@ -138,9 +135,17 @@ namespace DxxTray
             try
             {
                 // enable event handling
-                okBtn.Click += (click_sender, click_e) =>
+                confirmBtn.Click += (click_sender, click_e) =>
                 {
                     // logic
+                    using (var scope = new DataAccessScope())
+                    {
+                        var entry = entryModel.Entries.Create();
+                        entry.SubmitTime = picker.Value;
+
+                        logger.Debug($"ID: {entry.Id}, SubmitTime: {entry.SubmitTime}");
+                        scope.Complete();
+                    }
 
                     // UX
                     entryForm.Close();
@@ -189,12 +194,12 @@ namespace DxxTray
         private static Logger logger = LogManager.GetCurrentClassLogger();
 
         // engine fields
-        private SQLiteConnection conn;
+        private EntryModel entryModel;
 
         // UI/UX fields
         private NotifyIcon trayIcon;
         private Form entryForm;
         private DateTimePicker picker;
-        private Button okBtn;
+        private Button confirmBtn;
     }
 }
