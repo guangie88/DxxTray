@@ -4,7 +4,10 @@ using NLog;
 using Shaolinq;
 using Shaolinq.Sqlite;
 using System;
+using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.Drawing;
+using System.Linq;
 using System.Windows.Forms;
 
 namespace DxxTray
@@ -47,6 +50,8 @@ namespace DxxTray
                 var config = SqliteConfiguration.Create(DB_NAME);
 
                 entryModel = DataAccessModel.BuildDataAccessModel<EntryModel>(config);
+                //dirPathModel = DataAccessModel.BuildDataAccessModel<DirPathModel>(config);
+
                 entryModel.Create(DatabaseCreationOptions.DeleteExistingDatabase);
             }
             catch (Exception e)
@@ -68,9 +73,12 @@ namespace DxxTray
 
                     ContextMenu = new ContextMenu(new MenuItem[]
                     {
-                        new MenuItem("Add new entry", AddNewEntry),
                         new MenuItem("-"),
-                        new MenuItem("Exit", Exit),
+                        new MenuItem("Add &new entry...", AddNewEntry),
+                        new MenuItem("-"),
+                        new MenuItem("&Set storing directory...", SetStoringDir),
+                        new MenuItem("-"),
+                        new MenuItem("E&xit", Exit),
                     }),
 
                     Visible = true
@@ -135,7 +143,7 @@ namespace DxxTray
             try
             {
                 // enable event handling
-                confirmBtn.Click += (click_sender, click_e) =>
+                confirmBtn.Click += (sender, e) =>
                 {
                     // logic
                     using (var scope = new DataAccessScope())
@@ -143,12 +151,46 @@ namespace DxxTray
                         var entry = entryModel.Entries.Create();
                         entry.SubmitTime = picker.Value;
 
-                        logger.Debug($"ID: {entry.Id}, SubmitTime: {entry.SubmitTime}");
+                        logger.Debug($"New entry (Id: {entry.Id}, SubmitTime: {entry.SubmitTime})");
+
+                        var newMenuItem = new MenuItem($"{entry.SubmitTime} - {entry.Id}");
+                        newMenuItem.Click += (inner_sender, inner_e) => entryMenuItems.Remove(newMenuItem);
+                        entryMenuItems.Add(newMenuItem);
+
                         scope.Complete();
                     }
 
                     // UX
                     entryForm.Close();
+                };
+
+                entryMenuItems.CollectionChanged += (sender, e) =>
+                {
+                    // UX
+                    logger.Debug(e.Action);
+
+                    if (e.Action == NotifyCollectionChangedAction.Add)
+                    {
+                        var newMenuItems =
+                            from entry in e.NewItems.Cast<MenuItem>()
+                            select entry;
+
+                        foreach (var newMenuItem in newMenuItems)
+                        {
+                            trayIcon.ContextMenu.MenuItems.Add(entryMenuItems.Count - 1, newMenuItem);
+                        }
+                    }
+                    else if (e.Action == NotifyCollectionChangedAction.Remove)
+                    {
+                        var deletedMenuItems =
+                            from entry in e.OldItems.Cast<MenuItem>()
+                            select entry;
+
+                        foreach (var deletedMenuItem in deletedMenuItems)
+                        {
+                            trayIcon.ContextMenu.MenuItems.Remove(deletedMenuItem);
+                        }
+                    }
                 };
             }
             catch (Exception e)
@@ -178,6 +220,22 @@ namespace DxxTray
             }
         }
 
+        private void SetStoringDir(object sender, EventArgs e)
+        {
+            var dialog = new FolderBrowserDialog();
+
+            if (dialog.ShowDialog() == DialogResult.OK)
+            {
+                // logic
+                using (var scope = new DataAccessScope())
+                {
+                    //var dirPath = dirPathModel.DirPath;
+                    //dirPath.Value = dialog.SelectedPath;
+                    scope.Complete();
+                }
+            }
+        }
+
         private void Exit(object sender, EventArgs e)
         {
             ExitImpl();
@@ -195,6 +253,8 @@ namespace DxxTray
 
         // engine fields
         private EntryModel entryModel;
+        //private DirPathModel dirPathModel;
+        private ObservableCollection<MenuItem> entryMenuItems = new ObservableCollection<MenuItem>();
 
         // UI/UX fields
         private NotifyIcon trayIcon;
